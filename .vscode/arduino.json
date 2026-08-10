@@ -1,0 +1,7 @@
+{
+    "board": "esp8266:esp8266:generic",
+    "port": "/dev/cu.usbserial-A5069RR4",
+    "sketch": "espfryer.ino",
+    "output": "build",
+    "configuration": "xtal=80,ResetMethod=nodemcu,CrystalFreq=26,FlashFreq=40,FlashMode=dout,eesz=4M1M,baud=115200"
+}

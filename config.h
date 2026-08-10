@@ -1,0 +1,73 @@
+#pragma once
+
+// ── Pin Definitions ──────────────────────────────────────────────────────────
+// Raw GPIO numbers, not D0..D8 aliases — those are only defined on the
+// NodeMCU/Wemos variants, not on the generic ESP8266 build.
+// Buttons (active LOW, internal pull-up enabled — wire each button to GND)
+// GPIO12/13/14 are the only fully unrestricted pins left after I2C: no boot
+// strapping, no onboard LED, working internal pull-ups. Buttons go here so a
+// press during reset can never stop the board booting.
+#define PIN_BTN_UP    12   // GPIO12 (D6)
+#define PIN_BTN_DOWN  13   // GPIO13 (D7)
+#define PIN_BTN_SEL   14   // GPIO14 (D5)
+
+// Relays – on the two strapping-constrained pins, deliberately.
+// GPIO15 has a 10k pulldown and GPIO16 defaults LOW, so both sit LOW through
+// reset, brownout and crash. With active-HIGH drive that means "off", which is
+// the fail-safe state for a heating element.
+#define PIN_RELAY_HEAT 15  // GPIO15 (D8) – heating element
+#define PIN_RELAY_FAN  16  // GPIO16 (D0) – fan motor
+
+// Relay drive polarity.
+//   1 = active HIGH (HIGH = relay ON). Required by the GPIO15/16 assignment
+//       above. Needs an active-HIGH relay board, or a transistor inverter in
+//       front of an active-LOW one.
+//   0 = active LOW  (LOW = relay ON), the common blue opto-isolated boards.
+//       If you set this to 0 you MUST also move the relays off GPIO15/16 —
+//       GPIO15's pulldown would otherwise hold the heater ON through reset.
+#define RELAY_ACTIVE_HIGH 1
+
+#if RELAY_ACTIVE_HIGH
+  #define RELAY_ON  HIGH
+  #define RELAY_OFF LOW
+#else
+  #define RELAY_ON  LOW
+  #define RELAY_OFF HIGH
+#endif
+
+// NTC thermistor (voltage divider to A0)
+#define PIN_NTC       A0
+
+// LCD uses I2C: SDA = GPIO4 (D2), SCL = GPIO5 (D1) – ESP8266 default I2C
+
+// ── LCD ──────────────────────────────────────────────────────────────────────
+#define LCD_I2C_ADDR  0x27   // Change to 0x3F if screen stays blank
+#define LCD_COLS      16
+#define LCD_ROWS      2
+
+// ── Temperature Settings ─────────────────────────────────────────────────────
+#define TEMP_MIN_C    40     // °C
+#define TEMP_MAX_C    230    // °C
+#define TEMP_STEP_C   5      // °C per button press
+#define TEMP_DEFAULT  100    // °C
+
+// Hysteresis: heater turns ON below (target - HYST), OFF above (target + HYST)
+#define TEMP_HYSTERESIS 3    // °C
+
+// ── Time Settings ────────────────────────────────────────────────────────────
+#define TIME_MIN_MIN  15     // minutes
+#define TIME_MAX_MIN  90     // minutes
+#define TIME_STEP_MIN 15     // minutes per button press
+#define TIME_DEFAULT  30     // minutes
+
+// ── NTC Thermistor (100kΩ NTC, 10kΩ series resistor) ─────────────────────────
+#define NTC_BETA      3950   // Beta coefficient (from datasheet)
+#define NTC_R0        100000  // Nominal resistance at T0 (Ω)
+#define NTC_T0_K      298.15 // Nominal temperature in Kelvin (25°C)
+#define NTC_SERIES_R  10000  // Series resistor value (Ω)
+#define NTC_ADC_MAX   1023   // ESP8266 ADC resolution
+
+// ── Timing ───────────────────────────────────────────────────────────────────
+#define BTN_DEBOUNCE_MS   50
+#define TEMP_SAMPLE_MS    500   // how often to read NTC
+#define DISPLAY_REFRESH_MS 250  // how often to refresh LCD during cooking

@@ -1,0 +1,46 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "ESP8266",
+      "compilerPath": "/Users/javierf/Library/Arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/3.1.0-gcc10.3-e5f9fec/bin/xtensa-lx106-elf-g++",
+      "compilerArgs": ["-mlongcalls", "-mtext-section-literals"],
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-x86",
+      "defines": [
+        "ARDUINO=10607",
+        "ARDUINO_ARCH_ESP8266",
+        "ARDUINO_ESP8266_GENERIC",
+        "ESP8266",
+        "F_CPU=80000000L",
+        "__ets__",
+        "ICACHE_FLASH",
+        "NONOSDK22x_190703=1",
+        "LWIP_OPEN_SRC",
+        "TCP_MSS=536",
+        "LWIP_FEATURES=1",
+        "LWIP_IPV6=0",
+        "MMU_IRAM_SIZE=0x8000",
+        "MMU_ICACHE_SIZE=0x8000"
+      ],
+      "includePath": [
+        "${workspaceFolder}/**",
+        "/Users/javierf/Library/Arduino15/packages/esp8266/hardware/esp8266/3.1.2/cores/esp8266",
+        "/Users/javierf/Library/Arduino15/packages/esp8266/hardware/esp8266/3.1.2/variants/generic",
+        "/Users/javierf/Library/Arduino15/packages/esp8266/hardware/esp8266/3.1.2/libraries/**",
+        "/Users/javierf/Library/Arduino15/packages/esp8266/hardware/esp8266/3.1.2/tools/sdk/include",
+        "/Users/javierf/Library/Arduino15/packages/esp8266/hardware/esp8266/3.1.2/tools/sdk/lwip2/include",
+        "/Users/javierf/Documents/Arduino/libraries/**",
+        "/Users/javierf/Library/Arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/3.1.0-gcc10.3-e5f9fec/xtensa-lx106-elf/include",
+        "/Users/javierf/Library/Arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/3.1.0-gcc10.3-e5f9fec/lib/gcc/xtensa-lx106-elf/10.3.0/include"
+      ],
+      "forcedInclude": [
+        "/Users/javierf/Library/Arduino15/packages/esp8266/hardware/esp8266/3.1.2/cores/esp8266/Arduino.h"
+      ],
+      "browse": {
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ]
+}
