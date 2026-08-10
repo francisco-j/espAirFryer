@@ -14,6 +14,7 @@
  *
  * State machine:
  *   SET_TEMP → SET_HOURS → SET_MINS → PREHEAT → RUNNING → DONE → SET_TEMP
+ *   Any implausibly cold reading diverts to ERROR with the relays forced off.
  */
 
 #include <Wire.h>
@@ -29,7 +30,8 @@ enum State {
     STATE_SET_MINS,
     STATE_PREHEAT,
     STATE_RUNNING,
-    STATE_DONE
+    STATE_DONE,
+    STATE_ERROR
 };
 
 // ── Globals ───────────────────────────────────────────────────────────────────
@@ -105,6 +107,12 @@ int maxMinutes(int hours) { return hours >= 1 ? TIME_MINS_MAX_HRS : TIME_MINS_MA
 
 int totalCookMins() { return cookHours * 60 + cookMins; }
 
+// ── Sensor plausibility ───────────────────────────────────────────────────────
+// An open or broken NTC lead reads as raw 0, which readTemperatureC() reports as
+// 0.0 °C. Left unchecked the thermostat reads that as "freezing, heat harder"
+// and holds the element on indefinitely, so treat implausibly cold as a fault.
+bool sensorFault(float t) { return t < TEMP_FAULT_MIN_C; }
+
 // ── Temperature control (simple hysteresis) ───────────────────────────────────
 void updateThermostat() {
     if (currentTemp < targetTemp - TEMP_HYSTERESIS) setHeat(true);
@@ -153,9 +161,19 @@ void loop() {
         if (millis() - lastTempMs >= TEMP_SAMPLE_MS) {
             lastTempMs = millis();
             currentTemp = readTemperatureSmoothed(4);
-            updateThermostat();
-            Serial.printf("Temp: %.1f / %d C  Heat:%d Fan:%d\n",
-                          currentTemp, targetTemp, heatOn, fanOn);
+
+            if (sensorFault(currentTemp)) {
+                // Cut power before the thermostat can act on a bad reading.
+                relaysOff();
+                state = STATE_ERROR;
+                displayError(lcd, currentTemp);
+                sel = false;   // don't let this pass's press dismiss it instantly
+                Serial.printf("SENSOR FAULT: %.1f C – relays off\n", currentTemp);
+            } else {
+                updateThermostat();
+                Serial.printf("Temp: %.1f / %d C  Heat:%d Fan:%d\n",
+                              currentTemp, targetTemp, heatOn, fanOn);
+            }
         }
     }
 
@@ -208,12 +226,19 @@ void loop() {
             displaySetMins(lcd, targetTemp, cookHours, cookMins);
         }
         if (sel) {
-            // Start preheat: fan ON, heater ON, wait until target reached
-            state = STATE_PREHEAT;
-            setFan(true);
-            setHeat(true);
+            // Prove the sensor works *before* energising anything.
             currentTemp = readTemperatureSmoothed(4);
-            displayPreheat(lcd, currentTemp, targetTemp);
+            if (sensorFault(currentTemp)) {
+                state = STATE_ERROR;
+                displayError(lcd, currentTemp);
+                Serial.printf("SENSOR FAULT: %.1f C – refusing to start\n", currentTemp);
+            } else {
+                // Start preheat: fan ON, heater ON, wait until target reached
+                state = STATE_PREHEAT;
+                setFan(true);
+                setHeat(true);
+                displayPreheat(lcd, currentTemp, targetTemp);
+            }
         }
         break;
 
@@ -265,6 +290,15 @@ void loop() {
 
     // ── Done ──────────────────────────────────────────────────────────────────
     case STATE_DONE:
+        if (sel) {
+            state = STATE_SET_TEMP;
+            displaySetTemp(lcd, targetTemp);
+        }
+        break;
+
+    // ── Sensor fault – latched until acknowledged ─────────────────────────────
+    case STATE_ERROR:
+        relaysOff();   // re-asserted every pass, not just on entry
         if (sel) {
             state = STATE_SET_TEMP;
             displaySetTemp(lcd, targetTemp);

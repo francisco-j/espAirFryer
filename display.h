@@ -70,6 +70,18 @@ void displayDone(LiquidCrystal_I2C &lcd) {
     lcd.print(padRight(" Press SEL again", LCD_COLS));
 }
 
+// ── Sensor fault screen ───────────────────────────────────────────────────────
+// Shows the offending reading so a stuck 0.0 (open lead) can be told apart from
+// a plausible-but-too-cold value.
+void displayError(LiquidCrystal_I2C &lcd, float currentTemp) {
+    lcd.setCursor(0, 0);
+    lcd.print(padRight("SENSOR FAULT!", LCD_COLS));
+    char buf[LCD_COLS + 1];
+    snprintf(buf, sizeof(buf), "reads %.1fC", currentTemp);
+    lcd.setCursor(0, 1);
+    lcd.print(padRight(String(buf), LCD_COLS));
+}
+
 // ── Preheat screen ────────────────────────────────────────────────────────────
 void displayPreheat(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp) {
     lcd.setCursor(0, 0);

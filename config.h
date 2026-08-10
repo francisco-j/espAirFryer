@@ -18,22 +18,8 @@
 #define PIN_RELAY_HEAT 15  // GPIO15 (D8) – heating element
 #define PIN_RELAY_FAN  16  // GPIO16 (D0) – fan motor
 
-// Relay drive polarity.
-//   1 = active HIGH (HIGH = relay ON). Required by the GPIO15/16 assignment
-//       above. Needs an active-HIGH relay board, or a transistor inverter in
-//       front of an active-LOW one.
-//   0 = active LOW  (LOW = relay ON), the common blue opto-isolated boards.
-//       If you set this to 0 you MUST also move the relays off GPIO15/16 —
-//       GPIO15's pulldown would otherwise hold the heater ON through reset.
-#define RELAY_ACTIVE_HIGH 1
-
-#if RELAY_ACTIVE_HIGH
-  #define RELAY_ON  HIGH
-  #define RELAY_OFF LOW
-#else
-  #define RELAY_ON  LOW
-  #define RELAY_OFF HIGH
-#endif
+#define RELAY_ON  HIGH
+#define RELAY_OFF LOW
 
 // NTC thermistor (voltage divider to A0)
 #define PIN_NTC       A0
@@ -53,6 +39,14 @@
 
 // Hysteresis: heater turns ON below (target - HYST), OFF above (target + HYST)
 #define TEMP_HYSTERESIS 2    // °C
+
+// Sensor fault threshold. A disconnected or broken NTC lead reads as raw 0,
+// which temperature.h converts to 0.0 °C — a value the thermostat would happily
+// treat as "heat harder". Anything this cold is a broken sensor, not a cold
+// fryer, so the machine cuts the relays and latches into the error state.
+// Lower it if you run the fryer somewhere genuinely near freezing; keep it
+// above 0 or an open lead stops being detectable.
+#define TEMP_FAULT_MIN_C 10  // °C
 
 // ── Time Settings ────────────────────────────────────────────────────────────
 // Cook time is entered as hours first, then minutes.
