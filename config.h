@@ -52,13 +52,28 @@
 #define TEMP_DEFAULT  100    // °C
 
 // Hysteresis: heater turns ON below (target - HYST), OFF above (target + HYST)
-#define TEMP_HYSTERESIS 3    // °C
+#define TEMP_HYSTERESIS 2    // °C
 
 // ── Time Settings ────────────────────────────────────────────────────────────
-#define TIME_MIN_MIN  15     // minutes
-#define TIME_MAX_MIN  90     // minutes
-#define TIME_STEP_MIN 15     // minutes per button press
-#define TIME_DEFAULT  30     // minutes
+// Cook time is entered as hours first, then minutes.
+#define TIME_MAX_HOURS     6     // hours
+#define TIME_DEFAULT_HOURS 0
+#define TIME_DEFAULT_MINS  30
+
+// Minute step ladder. With an hour or more already on the clock the fine bands
+// stop being useful, so minutes move in quarter hours (0/15/30/45). With no
+// hours set the step grows with the value: 1 min below 10, 5 up to 30, 10 above.
+#define TIME_STEP_QUARTER  15    // used whenever hours >= 1
+#define TIME_STEP_FINE     1     // minutes < TIME_BAND_MED
+#define TIME_STEP_MED      5     // TIME_BAND_MED .. TIME_BAND_COARSE
+#define TIME_STEP_COARSE   10    // >= TIME_BAND_COARSE
+#define TIME_BAND_MED      10    // minutes
+#define TIME_BAND_COARSE   30    // minutes
+
+// Upper bound on the minutes field. Capped to the last quarter hour when hours
+// are set so the 15-minute ladder lands cleanly instead of clamping to 59.
+#define TIME_MINS_MAX      50
+#define TIME_MINS_MAX_HRS  45
 
 // ── NTC Thermistor (100kΩ NTC, 10kΩ series resistor) ─────────────────────────
 #define NTC_BETA      3950   // Beta coefficient (from datasheet)
@@ -70,4 +85,4 @@
 // ── Timing ───────────────────────────────────────────────────────────────────
 #define BTN_DEBOUNCE_MS   50
 #define TEMP_SAMPLE_MS    500   // how often to read NTC
-#define DISPLAY_REFRESH_MS 250  // how often to refresh LCD during cooking
+#define DISPLAY_REFRESH_MS 1000  // how often to refresh LCD during cooking

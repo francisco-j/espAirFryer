@@ -13,7 +13,7 @@
  *   - LiquidCrystal_I2C  (by Frank de Brabander)
  *
  * State machine:
- *   SET_TEMP → SET_TIME → PREHEAT → RUNNING → DONE → SET_TEMP
+ *   SET_TEMP → SET_HOURS → SET_MINS → PREHEAT → RUNNING → DONE → SET_TEMP
  */
 
 #include <Wire.h>
@@ -25,7 +25,8 @@
 // ── State machine ─────────────────────────────────────────────────────────────
 enum State {
     STATE_SET_TEMP,
-    STATE_SET_TIME,
+    STATE_SET_HOURS,
+    STATE_SET_MINS,
     STATE_PREHEAT,
     STATE_RUNNING,
     STATE_DONE
@@ -36,7 +37,8 @@ LiquidCrystal_I2C lcd(LCD_I2C_ADDR, LCD_COLS, LCD_ROWS);
 
 State state         = STATE_SET_TEMP;
 int   targetTemp    = TEMP_DEFAULT;
-int   cookTimeMins  = TIME_DEFAULT;
+int   cookHours     = TIME_DEFAULT_HOURS;
+int   cookMins      = TIME_DEFAULT_MINS;
 
 unsigned long cookEndMs     = 0;  // millis() when cooking ends
 unsigned long lastTempMs    = 0;  // last NTC sample time
@@ -84,6 +86,24 @@ void relaysOff() {
     setHeat(false);
     setFan(false);
 }
+
+// ── Cook time entry ───────────────────────────────────────────────────────────
+// Step size for the minutes field. Once there is an hour or more on the clock,
+// single minutes stop being worth scrolling through, so everything moves in
+// quarter hours. Below an hour the step grows with the value.
+int minuteStep(int mins, int hours) {
+    if (hours >= 1)             return TIME_STEP_QUARTER;
+    if (mins < TIME_BAND_MED)   return TIME_STEP_FINE;
+    if (mins < TIME_BAND_COARSE) return TIME_STEP_MED;
+    return TIME_STEP_COARSE;
+}
+
+// Minutes may only reach 0 when at least one hour is set — otherwise the total
+// cook time would be zero.
+int minMinutes(int hours) { return hours >= 1 ? 0 : 1; }
+int maxMinutes(int hours) { return hours >= 1 ? TIME_MINS_MAX_HRS : TIME_MINS_MAX; }
+
+int totalCookMins() { return cookHours * 60 + cookMins; }
 
 // ── Temperature control (simple hysteresis) ───────────────────────────────────
 void updateThermostat() {
@@ -152,20 +172,40 @@ void loop() {
             displaySetTemp(lcd, targetTemp);
         }
         if (sel) {
-            state = STATE_SET_TIME;
-            displaySetTime(lcd, targetTemp, cookTimeMins);
+            state = STATE_SET_HOURS;
+            displaySetHours(lcd, targetTemp, cookHours);
         }
         break;
 
-    // ── Select cook time ──────────────────────────────────────────────────────
-    case STATE_SET_TIME:
+    // ── Select cook time: hours ───────────────────────────────────────────────
+    case STATE_SET_HOURS:
+        if (up || dn) {
+            cookHours = up ? min(cookHours + 1, TIME_MAX_HOURS)
+                           : max(cookHours - 1, 0);
+            // Crossing the 1-hour boundary changes both bounds on the minutes
+            // field, so re-clamp it before it can be shown or edited.
+            cookMins = constrain(cookMins, minMinutes(cookHours), maxMinutes(cookHours));
+            displaySetHours(lcd, targetTemp, cookHours);
+        }
+        if (sel) {
+            state = STATE_SET_MINS;
+            displaySetMins(lcd, targetTemp, cookHours, cookMins);
+        }
+        break;
+
+    // ── Select cook time: minutes ─────────────────────────────────────────────
+    case STATE_SET_MINS:
         if (up) {
-            cookTimeMins = min(cookTimeMins + TIME_STEP_MIN, TIME_MAX_MIN);
-            displaySetTime(lcd, targetTemp, cookTimeMins);
+            cookMins = min(cookMins + minuteStep(cookMins, cookHours),
+                           maxMinutes(cookHours));
+            displaySetMins(lcd, targetTemp, cookHours, cookMins);
         }
         if (dn) {
-            cookTimeMins = max(cookTimeMins - TIME_STEP_MIN, TIME_MIN_MIN);
-            displaySetTime(lcd, targetTemp, cookTimeMins);
+            // Step by the band the value is moving *into*, so that pressing up
+            // then down returns to the value you started from.
+            cookMins = max(cookMins - minuteStep(cookMins - 1, cookHours),
+                           minMinutes(cookHours));
+            displaySetMins(lcd, targetTemp, cookHours, cookMins);
         }
         if (sel) {
             // Start preheat: fan ON, heater ON, wait until target reached
@@ -186,7 +226,7 @@ void loop() {
         if (currentTemp >= targetTemp - TEMP_HYSTERESIS) {
             // Target reached – start countdown
             state      = STATE_RUNNING;
-            cookEndMs  = millis() + (unsigned long)cookTimeMins * 60UL * 1000UL;
+            cookEndMs  = millis() + (unsigned long)totalCookMins() * 60UL * 1000UL;
             lastDisplayMs = 0;
         }
         // Allow user to abort by holding SEL

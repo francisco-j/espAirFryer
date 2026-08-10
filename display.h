@@ -18,18 +18,27 @@ void displaySetTemp(LiquidCrystal_I2C &lcd, int targetTemp) {
     lcd.print(padRight("  " + String(targetTemp) + " C  [^v OK]", LCD_COLS));
 }
 
-void displaySetTime(LiquidCrystal_I2C &lcd, int targetTemp, int timeMins) {
+void displaySetHours(LiquidCrystal_I2C &lcd, int targetTemp, int hours) {
     lcd.setCursor(0, 0);
-    lcd.print(padRight("Set Time (" + String(targetTemp) + "C):", LCD_COLS));
+    lcd.print(padRight("Set Hrs (" + String(targetTemp) + "C):", LCD_COLS));
     lcd.setCursor(0, 1);
-    lcd.print(padRight("  " + String(timeMins) + " min [^v OK]", LCD_COLS));
+    lcd.print(padRight("  " + String(hours) + " h    [^v OK]", LCD_COLS));
+}
+
+// Shows both fields so the running total stays visible while editing minutes.
+void displaySetMins(LiquidCrystal_I2C &lcd, int targetTemp, int hours, int mins) {
+    lcd.setCursor(0, 0);
+    lcd.print(padRight("Set Min (" + String(targetTemp) + "C):", LCD_COLS));
+    lcd.setCursor(0, 1);
+    lcd.print(padRight("  " + String(hours) + "h " + String(mins) + "m [^v OK]", LCD_COLS));
 }
 
 // ── Running screen ────────────────────────────────────────────────────────────
 // Shows current vs target temp and remaining time with heater/fan indicators.
 void displayRunning(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp,
                     int remainingSecs, bool heatOn, bool fanOn) {
-    int mins = remainingSecs / 60;
+    int hrs  = remainingSecs / 3600;
+    int mins = (remainingSecs % 3600) / 60;
     int secs = remainingSecs % 60;
 
     char buf[LCD_COLS + 1];
@@ -39,10 +48,14 @@ void displayRunning(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp,
     lcd.setCursor(0, 0);
     lcd.print(buf);
 
-    // Line 1: "02:45  [H+] [F+]"  indicators toggle with relay state
-    String status = String(mins < 10 ? "0" : "") + String(mins) + ":" +
-                    String(secs < 10 ? "0" : "") + String(secs) +
-                    "  " +
+    // Countdown drops the hours field once it is no longer needed, so short
+    // cooks keep the familiar MM:SS instead of a permanent leading "0:".
+    char clock[10];
+    if (hrs > 0) snprintf(clock, sizeof(clock), "%d:%02d:%02d", hrs, mins, secs);
+    else         snprintf(clock, sizeof(clock), "%02d:%02d", mins, secs);
+
+    // Line 1: "02:45  [H] [F]"  indicators toggle with relay state
+    String status = String(clock) + "  " +
                     String(heatOn ? "[H]" : "   ") + " " +
                     String(fanOn  ? "[F]" : "   ");
     lcd.setCursor(0, 1);

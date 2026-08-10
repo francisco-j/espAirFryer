@@ -26,10 +26,10 @@ with active-HIGH drive, LOW means the heating element is off.
 
 ## State machine flow
 
-    SET_TEMP → SET_TIME → PREHEAT → RUNNING → DONE
-        ▲                    │         │        │
-        │                    │ SEL     │ SEL    │ SEL
-        └────────────────────┴─────────┴────────┘
+    SET_TEMP → SET_HOURS → SET_MINS → PREHEAT → RUNNING → DONE
+        ▲                                │         │        │
+        │                                │ SEL     │ SEL    │ SEL
+        └────────────────────────────────┴─────────┴────────┘
                (abort / reset — all return to SET_TEMP)
 
 PREHEAT advances to RUNNING on its own once the measured temperature reaches
@@ -39,11 +39,31 @@ countdown expires. Both drop the relays on the way out.
 
 | State | UP/DOWN | SELECT |
 |---|---|---|
-| SET_TEMP | ±5 °C | advance to SET_TIME |
-| SET_TIME | ±15 min | start preheat |
+| SET_TEMP | ±5 °C | advance to SET_HOURS |
+| SET_HOURS | ±1 h, 0–`TIME_MAX_HOURS` | advance to SET_MINS |
+| SET_MINS | variable step, see below | start preheat |
 | PREHEAT | – | abort → SET_TEMP |
 | RUNNING | – | abort → SET_TEMP |
 | DONE | – | back to SET_TEMP |
+
+### Minute step ladder
+
+Cook time is entered as hours first, then minutes. The minute step depends on
+what is already on the clock:
+
+| Condition | Step | Range |
+|---|---|---|
+| hours ≥ 1 | 15 min | 0 – 45 |
+| hours = 0, minutes < 10 | 1 min | 1 – 10 |
+| hours = 0, minutes 10–29 | 5 min | 10 – 30 |
+| hours = 0, minutes ≥ 30 | 10 min | 30 – 59 |
+
+So with no hours set the ladder runs 1, 2 … 10, 15, 20, 25, 30, 40, 50; with an
+hour or more it is just 0, 15, 30, 45. Stepping down uses the step of the band
+being entered, so up-then-down always returns to the value you started from.
+
+Minutes cannot reach 0 unless at least one hour is set — that would make the
+total cook time zero. All the bands and limits are in `config.h`.
 
 ## Before uploading
 Required library (Library Manager): LiquidCrystal_I2C by Frank de Brabander.
