@@ -63,11 +63,20 @@ void displayRunning(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp,
 }
 
 // ── Done screen ───────────────────────────────────────────────────────────────
-void displayDone(LiquidCrystal_I2C &lcd) {
+// While the fan is still running out the cooldown, line 1 counts it down instead
+// of inviting a keypress — otherwise the screen says the cook is over while the
+// fan is audibly still going, which reads as a fault. SEL works either way.
+void displayDone(LiquidCrystal_I2C &lcd, int coolSecs = 0) {
     lcd.setCursor(0, 0);
     lcd.print(padRight("   DONE!  :)    ", LCD_COLS));
     lcd.setCursor(0, 1);
-    lcd.print(padRight(" Press SEL again", LCD_COLS));
+    if (coolSecs > 0) {
+        char buf[LCD_COLS + 1];
+        snprintf(buf, sizeof(buf), "Cooling %ds [F]", coolSecs);
+        lcd.print(padRight(String(buf), LCD_COLS));
+    } else {
+        lcd.print(padRight(" Press SEL again", LCD_COLS));
+    }
 }
 
 // ── Sensor fault screen ───────────────────────────────────────────────────────

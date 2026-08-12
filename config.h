@@ -132,3 +132,9 @@
 #define BTN_DEBOUNCE_MS   50
 #define TEMP_SAMPLE_MS    500   // how often to read NTC
 #define DISPLAY_REFRESH_MS 900  // how often to refresh LCD during cooking
+
+// Fan-only run-on after the cook finishes. The element holds far more heat than
+// the air around it — the same inertia the predictive controller exists to fight
+// — so cutting both relays together leaves that heat to soak into the chamber
+// and the basket instead of being carried out. SEL ends it early.
+#define COOLDOWN_MS       90000UL   // 1.5 minute

@@ -44,6 +44,7 @@ int   cookHours     = TIME_DEFAULT_HOURS;
 int   cookMins      = TIME_DEFAULT_MINS;
 
 unsigned long cookEndMs     = 0;  // millis() when cooking ends
+unsigned long cooldownEndMs = 0;  // millis() when the DONE fan run-on ends
 unsigned long lastTempMs    = 0;  // last NTC sample time
 unsigned long lastDisplayMs = 0;  // last display refresh
 
@@ -85,13 +86,20 @@ void setFan(bool on) {
     digitalWrite(PIN_RELAY_FAN, on ? RELAY_ON : RELAY_OFF);
 }
 
-// Every caller is an exit from an active state (abort, sensor fault, cook
-// finished), so the controller's rate history and duty accumulator are stale from
-// here on — clear them rather than let the next run inherit them.
-void relaysOff() {
+// Cuts the element and leaves the fan alone — the cook-finished path needs
+// exactly this, so the fan can run on through the cooldown. The controller's rate
+// history and duty accumulator are stale the moment anything other than
+// updateThermostat() drives the relay, so clear them here rather than let the
+// next run inherit them.
+void heaterOff() {
     setHeat(false);
-    setFan(false);
     controlReset();
+}
+
+// Every other exit from an active state — abort, sensor fault — drops both.
+void relaysOff() {
+    heaterOff();
+    setFan(false);
 }
 
 // ── Cook time entry ───────────────────────────────────────────────────────────
@@ -285,10 +293,14 @@ void loop() {
         long remaining = (long)(cookEndMs - millis()) / 1000L;
 
         if (remaining <= 0) {
-            // Done!
-            relaysOff();
-            state = STATE_DONE;
-            displayDone(lcd);
+            // Cook finished. Element off, fan left running for COOLDOWN_MS so the
+            // heat still stored in the element is carried out rather than left to
+            // soak into the chamber and the basket.
+            heaterOff();
+            state         = STATE_DONE;
+            cooldownEndMs = millis() + COOLDOWN_MS;
+            lastDisplayMs = millis();
+            displayDone(lcd, COOLDOWN_MS / 1000UL);
             break;
         }
 
@@ -307,12 +319,31 @@ void loop() {
     }
 
     // ── Done ──────────────────────────────────────────────────────────────────
-    case STATE_DONE:
+    case STATE_DONE: {
+        // Fan-only cooldown. Signed difference, like the cook countdown above, so
+        // the comparison still works across the millis() rollover.
+        long coolLeft = (long)(cooldownEndMs - millis()) / 1000L;
+
+        // fanOn doubles as "cooldown still in progress", so this stops running
+        // once the fan is off and the screen is not repainted on every pass.
+        if (fanOn) {
+            if (coolLeft <= 0) {
+                setFan(false);
+                displayDone(lcd);            // drops the countdown line
+            } else if (millis() - lastDisplayMs >= DISPLAY_REFRESH_MS) {
+                lastDisplayMs = millis();
+                displayDone(lcd, (int)coolLeft);
+            }
+        }
+
+        // SEL ends the cooldown early rather than having to be waited out.
         if (sel) {
+            relaysOff();
             state = STATE_SET_TEMP;
             displaySetTemp(lcd, targetTemp);
         }
         break;
+    }
 
     // ── Sensor fault – latched until acknowledged ─────────────────────────────
     case STATE_ERROR:

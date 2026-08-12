@@ -38,7 +38,9 @@ with active-HIGH drive, LOW means the heating element is off.
 PREHEAT advances to RUNNING on its own once the measured temperature reaches
 `target − TEMP_HYSTERESIS`; the cook countdown starts at that moment, so
 preheating does not eat into cook time. RUNNING advances to DONE when the
-countdown expires. Both drop the relays on the way out.
+countdown expires — cutting the element but *not* the fan, which runs on through
+the cooldown described below. Every other exit from an active state, abort or
+sensor fault, drops both relays.
 
 | State | UP/DOWN | SELECT |
 |---|---|---|
@@ -47,8 +49,26 @@ countdown expires. Both drop the relays on the way out.
 | SET_MINS | variable step, see below | start preheat (or → ERROR) |
 | PREHEAT | – | abort → SET_TEMP |
 | RUNNING | – | abort → SET_TEMP |
-| DONE | – | back to SET_TEMP |
+| DONE | – | end cooldown, back to SET_TEMP |
 | ERROR | – | acknowledge → SET_TEMP |
+
+### Fan cooldown
+
+The element holds far more heat than the air around it — the same thermal inertia
+the predictive controller exists to fight. Cutting both relays the instant the
+countdown expires leaves that stored heat to soak into the chamber and the
+basket, so RUNNING → DONE cuts only the element and lets the fan run on for
+`COOLDOWN_MS` (default 90 s) to carry it out.
+
+`heaterOff()` exists for exactly this transition: it drops the element and
+resynchronises the controller while leaving the fan untouched. `relaysOff()` is
+that plus the fan, and is what every other exit uses.
+
+DONE does not sample the NTC, so the cooldown is a fixed duration rather than a
+wait for a temperature — it is not a safety interlock and nothing depends on it
+finishing. Pressing SEL ends it immediately and returns to SET_TEMP with both
+relays off. `fanOn` doubles as the "still cooling" flag, so once it clears, the
+state stops doing any work.
 
 ### Display screens
 
@@ -65,7 +85,7 @@ line. Values below are the power-on defaults (`TEMP_DEFAULT` 100 °C,
 | SET_MINS | `displaySetMins()` | on each UP/DOWN press |
 | PREHEAT | `displayPreheat()` | every `DISPLAY_REFRESH_MS` |
 | RUNNING | `displayRunning()` | every `DISPLAY_REFRESH_MS` |
-| DONE | `displayDone()` | once, on entry |
+| DONE | `displayDone()` | every `DISPLAY_REFRESH_MS` while cooling, then once more |
 | ERROR | `displayError()` | once, on entry |
 
 The three setup screens redraw only on a keypress rather than on a timer —
@@ -84,11 +104,22 @@ The target temperature stays in the header of both time screens, and SET_MINS
 shows hours and minutes together, so the full setting is always visible while
 you edit the last field of it.
 
-    PREHEAT                 RUNNING                 DONE
+    PREHEAT                 RUNNING                 DONE (cooling)
     ┌────────────────┐      ┌────────────────┐      ┌────────────────┐
     │Preheating...   │      │118C  TRGT:120C │      │   DONE!  :)    │
-    │  52C -> 100C   │      │02:45  [H] [F]  │      │ Press SEL again│
+    │  52C -> 100C   │      │02:45  [H] [F]  │      │Cooling 45s [F] │
     └────────────────┘      └────────────────┘      └────────────────┘
+
+DONE has two forms, selected by the `coolSecs` argument to `displayDone()`. The
+one above counts the cooldown down; once the fan stops, line 1 becomes the
+prompt. Without that split the screen would announce the cook was over while the
+fan was audibly still going, which reads as a fault:
+
+    DONE (finished)
+    ┌────────────────┐
+    │   DONE!  :)    │
+    │ Press SEL again│
+    └────────────────┘
 
 `[H]` and `[F]` mirror the heat and fan relays, each blanked to three spaces
 when its relay is off — so `[H]` blinking in and out through a cook is the duty
