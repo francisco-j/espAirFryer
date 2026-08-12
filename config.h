@@ -65,15 +65,15 @@
 // DUTY_HOLD as the projected temperature reaches the setpoint. DUTY_HOLD is the
 // duty demanded right at the setpoint — the standing loss the element has to
 // cover. Too high and the temperature creeps up, too low and it droops.
-#define APPROACH_BAND_C     20.0f   // °C
-#define DUTY_HOLD           0.15f   // 0..1
+#define APPROACH_BAND_C     15.0f   // °C
+#define DUTY_HOLD           0.20f   // 0..1
 
 // Mechanical relay protection: once switched, the relay is held at least this
 // long. The modulator stretches its period to honour these rather than dropping
 // short pulses, so low duties stay accurate. Cost: a cutoff can lag by up to
 // RELAY_MIN_ON_MS, which the predictive lead above already covers.
-#define RELAY_MIN_ON_MS     2500
-#define RELAY_MIN_OFF_MS    3000
+#define RELAY_MIN_ON_MS     2000
+#define RELAY_MIN_OFF_MS    2000
 
 // Sensor fault threshold. A disconnected or broken NTC lead reads as raw 0,
 // which temperature.h converts to 0.0 °C — a value the thermostat would happily
@@ -114,4 +114,4 @@
 // ── Timing ───────────────────────────────────────────────────────────────────
 #define BTN_DEBOUNCE_MS   50
 #define TEMP_SAMPLE_MS    500   // how often to read NTC
-#define DISPLAY_REFRESH_MS 1000  // how often to refresh LCD during cooking
+#define DISPLAY_REFRESH_MS 900  // how often to refresh LCD during cooking
