@@ -33,9 +33,9 @@
 
 // ── Temperature Settings ─────────────────────────────────────────────────────
 #define TEMP_MIN_C    40     // °C
-#define TEMP_MAX_C    230    // °C
+#define TEMP_MAX_C    200    // °C
 #define TEMP_STEP_C   5      // °C per button press
-#define TEMP_DEFAULT  100    // °C
+#define TEMP_DEFAULT  80    // °C
 
 // Hysteresis band. With the predictive controller in control.h this is no longer
 // the main switching rule — it is the hard overtemp backstop (heat is cut the
@@ -131,7 +131,7 @@
 // ── Timing ───────────────────────────────────────────────────────────────────
 #define BTN_DEBOUNCE_MS   50
 #define TEMP_SAMPLE_MS    500   // how often to read NTC
-#define DISPLAY_REFRESH_MS 900  // how often to refresh LCD during cooking
+#define DISPLAY_REFRESH_MS 750  // how often to refresh LCD during cooking
 
 // Preheat watchdog. A fryer that has not reached its setpoint within this long
 // is not merely slow — a dead element, a stuck relay, a basket left out, a lid
