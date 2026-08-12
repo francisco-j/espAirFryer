@@ -37,8 +37,43 @@
 #define TEMP_STEP_C   5      // °C per button press
 #define TEMP_DEFAULT  100    // °C
 
-// Hysteresis: heater turns ON below (target - HYST), OFF above (target + HYST)
+// Hysteresis band. With the predictive controller in control.h this is no longer
+// the main switching rule — it is the hard overtemp backstop (heat is cut the
+// moment the *measured* temperature exceeds target + HYST, minimum on-time
+// ignored) and the threshold PREHEAT uses to declare the setpoint reached.
 #define TEMP_HYSTERESIS 2    // °C
+
+// ── Heater modulation (thermal-inertia compensation) ─────────────────────────
+// See the header comment in control.h for what these do. Tuning order: get
+// PREDICT_LEAD_S right first, then trim APPROACH_BAND_C and DUTY_HOLD.
+
+// How far ahead the controller extrapolates the measured rate of rise when
+// deciding to cut power. A good first guess is the overshoot you get with plain
+// hysteresis divided by the rate of rise near the setpoint — 20 °C at
+// 0.4 °C/s ≈ 50 s. Raise it if the fryer still overshoots; lower it if preheat
+// crawls or stalls short of the setpoint.
+#define PREDICT_LEAD_S      45.0f   // seconds
+
+// Rate of rise is measured across this window rather than between adjacent
+// samples — one 500 ms interval is all ADC noise. Should be a whole multiple of
+// TEMP_SAMPLE_MS. DERIV_SMOOTH_ALPHA then low-passes the result: lower is
+// smoother but adds lag, which works against the prediction.
+#define DERIV_WINDOW_MS     5000
+#define DERIV_SMOOTH_ALPHA  0.3f    // 0..1
+
+// Proportional band: full power below (target - band), tapering linearly to
+// DUTY_HOLD as the projected temperature reaches the setpoint. DUTY_HOLD is the
+// duty demanded right at the setpoint — the standing loss the element has to
+// cover. Too high and the temperature creeps up, too low and it droops.
+#define APPROACH_BAND_C     20.0f   // °C
+#define DUTY_HOLD           0.15f   // 0..1
+
+// Mechanical relay protection: once switched, the relay is held at least this
+// long. The modulator stretches its period to honour these rather than dropping
+// short pulses, so low duties stay accurate. Cost: a cutoff can lag by up to
+// RELAY_MIN_ON_MS, which the predictive lead above already covers.
+#define RELAY_MIN_ON_MS     2500
+#define RELAY_MIN_OFF_MS    3000
 
 // Sensor fault threshold. A disconnected or broken NTC lead reads as raw 0,
 // which temperature.h converts to 0.0 °C — a value the thermostat would happily

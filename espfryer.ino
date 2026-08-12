@@ -21,6 +21,7 @@
 #include <LiquidCrystal_I2C.h>
 #include "config.h"
 #include "temperature.h"
+#include "control.h"
 #include "display.h"
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -84,9 +85,13 @@ void setFan(bool on) {
     digitalWrite(PIN_RELAY_FAN, on ? RELAY_ON : RELAY_OFF);
 }
 
+// Every caller is an exit from an active state (abort, sensor fault, cook
+// finished), so the controller's rate history and duty accumulator are stale from
+// here on — clear them rather than let the next run inherit them.
 void relaysOff() {
     setHeat(false);
     setFan(false);
+    controlReset();
 }
 
 // ── Cook time entry ───────────────────────────────────────────────────────────
@@ -113,10 +118,14 @@ int totalCookMins() { return cookHours * 60 + cookMins; }
 // and holds the element on indefinitely, so treat implausibly cold as a fault.
 bool sensorFault(float t) { return t < TEMP_FAULT_MIN_C; }
 
-// ── Temperature control (simple hysteresis) ───────────────────────────────────
+// ── Temperature control ───────────────────────────────────────────────────────
+// The switching decision lives in control.h — predictive cutoff plus a duty
+// taper, because plain hysteresis cannot cope with the element's thermal inertia
+// (it overshot a 50 °C setpoint by ~20 °C). All this does is push the reading in
+// and drive the relay with whatever comes back.
 void updateThermostat() {
-    if (currentTemp < targetTemp - TEMP_HYSTERESIS) setHeat(true);
-    if (currentTemp > targetTemp + TEMP_HYSTERESIS) setHeat(false);
+    controlUpdate(currentTemp, (float)targetTemp);
+    setHeat(controlHeatDemand());
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -171,8 +180,13 @@ void loop() {
                 Serial.printf("SENSOR FAULT: %.1f C – relays off\n", currentTemp);
             } else {
                 updateThermostat();
-                Serial.printf("Temp: %.1f / %d C  Heat:%d Fan:%d\n",
-                              currentTemp, targetTemp, heatOn, fanOn);
+                // Rate and duty are logged because they are what you tune
+                // PREDICT_LEAD_S and APPROACH_BAND_C against.
+                Serial.printf("Temp: %.1f / %d C  rate:%+.2f C/s  proj:%.1f  "
+                              "duty:%3.0f%%  Heat:%d Fan:%d\n",
+                              currentTemp, targetTemp, controlRate(),
+                              currentTemp + controlRate() * PREDICT_LEAD_S,
+                              controlDuty() * 100.0f, heatOn, fanOn);
             }
         }
     }
@@ -233,10 +247,14 @@ void loop() {
                 displayError(lcd, currentTemp);
                 Serial.printf("SENSOR FAULT: %.1f C – refusing to start\n", currentTemp);
             } else {
-                // Start preheat: fan ON, heater ON, wait until target reached
+                // Start preheat: fan ON, wait until target reached. The heater is
+                // left to the controller — from cold it demands full power, so
+                // this fires the element on the spot, but starting it through
+                // the controller keeps the duty accounting honest.
                 state = STATE_PREHEAT;
                 setFan(true);
-                setHeat(true);
+                controlReset();
+                updateThermostat();
                 displayPreheat(lcd, currentTemp, targetTemp);
             }
         }

@@ -4,6 +4,7 @@ espfryer/
  - espfryer.ino   – main sketch & state machine
  - config.h       – all pin definitions and tuneable constants
  - temperature.h  – NTC → °C conversion (Beta equation)
+ - control.h      – heater control: predictive cutoff + duty modulation
  - display.h      – LCD screen functions for each state
 
 ## Pinout
@@ -48,6 +49,67 @@ countdown expires. Both drop the relays on the way out.
 | RUNNING | – | abort → SET_TEMP |
 | DONE | – | back to SET_TEMP |
 | ERROR | – | acknowledge → SET_TEMP |
+
+### Heater control
+
+Plain hysteresis does not work on this machine. The element holds far more heat
+than the chamber air, so cutting power the instant the setpoint is reached still
+dumps the element's stored energy into the chamber afterwards — a 50 °C setpoint
+overshot to 70 °C. Hysteresis has no anticipation, so tightening
+`TEMP_HYSTERESIS` does nothing about it.
+
+`control.h` replaces it with two mechanisms:
+
+**Predictive cutoff.** The switching decision runs on a projected temperature —
+the current reading extrapolated `PREDICT_LEAD_S` seconds along the measured rate
+of rise — rather than on the reading itself. The element goes off while still
+climbing and coasts into the setpoint. Because the projection uses the *measured*
+rate, it adapts to load on its own: a full basket heats slower, so the cutoff
+comes later.
+
+**Duty taper.** Power is not binary. Above `target − APPROACH_BAND_C` (projected)
+the duty falls linearly from 100% to `DUTY_HOLD`, so there is less stored energy
+left in the element to coast on in the first place. Throttling lowers the rate of
+rise, which shortens the projection and lets the duty back up — the loop settles
+itself. Together the two are a PD controller with the derivative gain expressed
+as a lead time.
+
+Rate of rise is measured across `DERIV_WINDOW_MS` (5 s), not between adjacent
+samples: one 500 ms interval on the ESP8266 ADC is all noise, and with a 45 s
+lead a 0.1 °C/s error in the rate becomes 4.5 °C of error in the projection.
+
+**Relay modulation.** The duty demand drives a mechanical relay, held at least
+`RELAY_MIN_ON_MS` / `RELAY_MIN_OFF_MS` per switch. Rather than truncate pulses
+too short to be worth firing, the modulator banks on-time owed and stretches the
+period: a 5% demand comes out as ~2.5 s on / ~50 s off, a 50% demand as ~6 s on /
+~6 s off. Average duty is honoured at any demand. The cost is up to
+`RELAY_MIN_ON_MS` of latency on a cutoff, which the predictive lead absorbs.
+
+`TEMP_HYSTERESIS` survives as the hard backstop: if the *measured* temperature
+ever exceeds `target + TEMP_HYSTERESIS`, heat is cut immediately and the minimum
+on-time is ignored — safety outranks contact wear.
+
+#### Tuning
+
+Watch the serial log (115200) through a preheat; it prints the measured rate, the
+projection and the demanded duty every sample:
+
+    Temp: 41.5 / 50 C  rate:+0.38 C/s  proj:58.6  duty: 15%  Heat:0 Fan:1
+
+Then, in order:
+
+| Symptom | Change |
+|---|---|
+| Still overshoots | raise `PREDICT_LEAD_S` |
+| Stalls short of the setpoint, or preheat crawls | lower `PREDICT_LEAD_S` |
+| Reaches the setpoint but then creeps upward | lower `DUTY_HOLD` |
+| Sags a few °C below the setpoint and stays there | raise `DUTY_HOLD` |
+| Rate reading is visibly jumpy | raise `DERIV_WINDOW_MS`, or lower `DERIV_SMOOTH_ALPHA` |
+
+Calibrate the thermistor before tuning any of this — a control loop cannot be
+tuned against a wrong measurement. Check `NTC_R0` and `NTC_BETA` against the
+actual part (`NTC_R0` is currently set for a 100 kΩ thermistor) and verify the
+reading in ice water and boiling water.
 
 ### Sensor fault detection
 
