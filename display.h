@@ -91,6 +91,20 @@ void displayError(LiquidCrystal_I2C &lcd, float currentTemp) {
     lcd.print(padRight(String(buf), LCD_COLS));
 }
 
+// ── Preheat timeout screen ────────────────────────────────────────────────────
+// Shares STATE_ERROR with the sensor fault, so it has to name which fault it is.
+// Line 1 is how far the preheat actually got, which is the diagnostic: a reading
+// close to target points at an underpowered element or a lid left open, one
+// barely off ambient at a dead element or a relay that never closed.
+void displayTimeout(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp) {
+    lcd.setCursor(0, 0);
+    lcd.print(padRight("PREHEAT TIMEOUT!", LCD_COLS));
+    char buf[LCD_COLS + 1];
+    snprintf(buf, sizeof(buf), " %3dC of %3dC", (int)currentTemp, targetTemp);
+    lcd.setCursor(0, 1);
+    lcd.print(padRight(String(buf), LCD_COLS));
+}
+
 // ── Preheat screen ────────────────────────────────────────────────────────────
 void displayPreheat(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp) {
     lcd.setCursor(0, 0);

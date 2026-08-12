@@ -14,7 +14,8 @@
  *
  * State machine:
  *   SET_TEMP → SET_HOURS → SET_MINS → PREHEAT → RUNNING → DONE → SET_TEMP
- *   Any implausibly cold reading diverts to ERROR with the relays forced off.
+ *   Any implausibly cold reading diverts to ERROR with the relays forced off, as
+ *   does a preheat that has not reached its setpoint within PREHEAT_TIMEOUT_MS.
  */
 
 #include <Wire.h>
@@ -44,6 +45,7 @@ int   cookHours     = TIME_DEFAULT_HOURS;
 int   cookMins      = TIME_DEFAULT_MINS;
 
 unsigned long cookEndMs     = 0;  // millis() when cooking ends
+unsigned long preheatEndMs  = 0;  // millis() when preheat gives up (watchdog)
 unsigned long cooldownEndMs = 0;  // millis() when the DONE fan run-on ends
 unsigned long lastTempMs    = 0;  // last NTC sample time
 unsigned long lastDisplayMs = 0;  // last display refresh
@@ -260,6 +262,7 @@ void loop() {
                 // this fires the element on the spot, but starting it through
                 // the controller keeps the duty accounting honest.
                 state = STATE_PREHEAT;
+                preheatEndMs = millis() + PREHEAT_TIMEOUT_MS;
                 setFan(true);
                 controlReset();
                 updateThermostat();
@@ -279,6 +282,18 @@ void loop() {
             state      = STATE_RUNNING;
             cookEndMs  = millis() + (unsigned long)totalCookMins() * 60UL * 1000UL;
             lastDisplayMs = 0;
+        } else if ((long)(preheatEndMs - millis()) <= 0) {
+            // Watchdog: still short of the setpoint after PREHEAT_TIMEOUT_MS. The
+            // element is either broken or fighting something it cannot win, and
+            // the only other option is to keep demanding heat indefinitely — so
+            // latch the same fault a bad sensor produces. Checked in the else
+            // branch so a preheat that completes on the deadline still wins.
+            relaysOff();
+            state = STATE_ERROR;
+            displayTimeout(lcd, currentTemp, targetTemp);
+            sel = false;   // don't let this pass's press dismiss it instantly
+            Serial.printf("PREHEAT TIMEOUT: %.1f of %d C after %lu s – relays off\n",
+                          currentTemp, targetTemp, PREHEAT_TIMEOUT_MS / 1000UL);
         }
         // Allow user to abort by holding SEL
         if (sel) {
@@ -345,7 +360,9 @@ void loop() {
         break;
     }
 
-    // ── Sensor fault – latched until acknowledged ─────────────────────────────
+    // ── Fault (bad sensor or preheat timeout) – latched until acknowledged ────
+    // The screen was painted by whichever check latched the fault and is never
+    // repainted here, so it keeps naming the cause until SEL clears it.
     case STATE_ERROR:
         relaysOff();   // re-asserted every pass, not just on entry
         if (sel) {

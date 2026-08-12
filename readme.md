@@ -33,14 +33,20 @@ with active-HIGH drive, LOW means the heating element is off.
         └───────────────────────┼────────┴─────────┴────────┘
         │                       │        │
         │                       ▼        ▼
-        └──────── SEL ────── [ ERROR ] ◄─┘   sensor reads < TEMP_FAULT_MIN_C
+        └──────── SEL ────── [ ERROR ] ◄─┘   sensor reads < TEMP_FAULT_MIN_C,
+                                             or preheat exceeds
+                                             PREHEAT_TIMEOUT_MS
 
 PREHEAT advances to RUNNING on its own once the measured temperature reaches
 `target − TEMP_HYSTERESIS`; the cook countdown starts at that moment, so
 preheating does not eat into cook time. RUNNING advances to DONE when the
 countdown expires — cutting the element but *not* the fan, which runs on through
 the cooldown described below. Every other exit from an active state, abort or
-sensor fault, drops both relays.
+fault, drops both relays.
+
+PREHEAT is also the one state with a deadline on it: if the setpoint is not
+reached within `PREHEAT_TIMEOUT_MS` it gives up into ERROR rather than demanding
+heat indefinitely. See [Preheat timeout](#preheat-timeout).
 
 | State | UP/DOWN | SELECT |
 |---|---|---|
@@ -51,6 +57,29 @@ sensor fault, drops both relays.
 | RUNNING | – | abort → SET_TEMP |
 | DONE | – | end cooldown, back to SET_TEMP |
 | ERROR | – | acknowledge → SET_TEMP |
+
+### Preheat timeout
+
+Entering PREHEAT stamps a deadline `PREHEAT_TIMEOUT_MS` (default 10 minutes)
+ahead. If the measured temperature has not reached `target − TEMP_HYSTERESIS` by
+then, both relays drop and the machine latches into ERROR. Without it, a fryer
+that physically cannot reach its setpoint — dead element, relay that never
+closed, lid left open — sits demanding heat for as long as it is powered, which
+is the one behaviour the fault states exist to prevent.
+
+The check sits in the `else` branch of the target-reached test, so a preheat that
+completes on the deadline still wins the race. Like the other deadlines in the
+sketch it compares a signed difference (`(long)(preheatEndMs - millis()) <= 0`)
+rather than two timestamps, so it survives the `millis()` rollover.
+
+This is a **wall-clock limit, not a stall detector**, and that is its weakness: it
+cannot distinguish broken hardware from a legitimately slow climb. A full basket
+going from cold to a high setpoint is the case to watch — the rate of rise falls
+off badly near the top of the range as losses grow, so the last stretch is much
+slower than the first. If it ever trips on a cook that was only slow, raise the
+constant. The stricter alternative would be to watch `controlRate()` for a stall
+while below target, which catches a dead element in seconds and never false-trips
+on a slow one, at the cost of needing its own threshold tuned.
 
 ### Fan cooldown
 
@@ -86,7 +115,7 @@ line. Values below are the power-on defaults (`TEMP_DEFAULT` 100 °C,
 | PREHEAT | `displayPreheat()` | every `DISPLAY_REFRESH_MS` |
 | RUNNING | `displayRunning()` | every `DISPLAY_REFRESH_MS` |
 | DONE | `displayDone()` | every `DISPLAY_REFRESH_MS` while cooling, then once more |
-| ERROR | `displayError()` | once, on entry |
+| ERROR | `displayError()` / `displayTimeout()` | once, by whichever check latched it |
 
 The three setup screens redraw only on a keypress rather than on a timer —
 there is nothing on them that changes on its own. PREHEAT and RUNNING carry a
@@ -131,15 +160,23 @@ The countdown drops the hours field once it is no longer needed, so a short cook
 shows `02:45` rather than a permanent leading `0:`. With an hour or more left it
 becomes `1:30:00`, which fills the line exactly.
 
-    ERROR
-    ┌────────────────┐
-    │SENSOR FAULT!   │
-    │reads 0.0C      │
-    └────────────────┘
+ERROR is shared by both faults, so its screen has to name the cause. Neither is
+ever repainted — whichever check latched the fault paints it once, and it stands
+until SEL clears it:
 
-ERROR prints the offending reading rather than just the fault, so a stuck `0.0C`
-from an open lead can be told apart from a plausible-but-too-cold value. See
-[Sensor fault detection](#sensor-fault-detection).
+    ERROR (sensor)          ERROR (timeout)
+    ┌────────────────┐      ┌────────────────┐
+    │SENSOR FAULT!   │      │PREHEAT TIMEOUT!│
+    │reads 0.0C      │      │ 78C of 120C    │
+    └────────────────┘      └────────────────┘
+
+Both spend line 1 on a measurement rather than on advice, because that is what
+tells the two failure modes apart. A stuck `0.0C` is an open lead, where a
+plausible-but-too-cold value is a real reading; and on a timeout, a temperature
+close to target suggests an underpowered element or a lid left open, while one
+barely off ambient suggests a dead element or a relay that never closed. See
+[Sensor fault detection](#sensor-fault-detection) and
+[Preheat timeout](#preheat-timeout).
 
 Only the target is labelled on RUNNING line 0; the bare number is the current
 temperature. Labelling both ran the line to 17 characters, one past the 16 the

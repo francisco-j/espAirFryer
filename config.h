@@ -133,6 +133,18 @@
 #define TEMP_SAMPLE_MS    500   // how often to read NTC
 #define DISPLAY_REFRESH_MS 900  // how often to refresh LCD during cooking
 
+// Preheat watchdog. A fryer that has not reached its setpoint within this long
+// is not merely slow — a dead element, a stuck relay, a basket left out, a lid
+// not closed — and the alternative to giving up is demanding heat forever. On
+// expiry the relays drop and the machine latches into the same fault state a bad
+// sensor produces.
+//
+// This is a wall-clock limit, not a stall detector, so it has to be generous
+// enough for the slowest legitimate preheat: a full basket from cold to a high
+// setpoint. If it ever trips on a cook that was merely slow, raise it — the
+// timeout exists to catch broken hardware, not to enforce a schedule.
+#define PREHEAT_TIMEOUT_MS 600000UL  // 10 minutes
+
 // Fan-only run-on after the cook finishes. The element holds far more heat than
 // the air around it — the same inertia the predictive controller exists to fight
 // — so cutting both relays together leaves that heat to soak into the chamber
