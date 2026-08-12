@@ -188,5 +188,18 @@ references. Confirm the fryer's 5V rail is isolated from mains before wiring
 anything to it.
 
 
-# load
-CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"; FQBN="esp8266:esp8266:generic:xtal=80,ResetMethod=nodemcu,CrystalFreq=26,FlashFreq=40,FlashMode=dout,eesz=4M1M,baud=115200"; "$CLI" compile --fqbn "$FQBN" /Users/javierf/Proyects/espfryer 2>&1 | tail -15 && echo "=== UPLOADING ===" && "$CLI" upload -p /dev/cu.usbserial-A5069RR4 --fqbn "$FQBN" /Users/javierf/Proyects/espfryer 2>&1 | tail -12
+## Build and load
+
+    ./build.sh      # compile only
+    ./flash.sh      # compile, then upload
+    ./monitor.sh    # serial monitor
+
+Paths, FQBN, port and monitor baud live in `build.conf` — the only file to edit
+if the arduino-cli location or the board's serial port changes. The port can also
+be overridden per-run, and if it is left empty the scripts pick the first
+`/dev/cu.usbserial-*` device they find:
+
+    PORT=/dev/cu.usbserial-XXXX ./flash.sh
+
+Extra arguments are passed straight through to arduino-cli, e.g. `./build.sh -v`
+for a verbose compile.
