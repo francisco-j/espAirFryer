@@ -104,10 +104,27 @@
 #define TIME_MINS_MAX      50
 #define TIME_MINS_MAX_HRS  45
 
-// ── NTC Thermistor (100kΩ NTC, 10kΩ series resistor) ─────────────────────────
-#define NTC_BETA      3950   // Beta coefficient (from datasheet)
-#define NTC_R0        100000  // Nominal resistance at T0 (Ω)
-#define NTC_T0_K      298.15 // Nominal temperature in Kelvin (25°C)
+// ── NTC Thermistor (120kΩ NTC, 10kΩ series resistor) ─────────────────────────
+// Measured, not from a datasheet — the part is not the 100kΩ/3950 it was sold
+// as. Two-point measurement with a meter: 120 kΩ at 24 °C, 7.8 kΩ in boiling
+// water taken as 95 °C. Beta follows from those two points:
+//   B = ln(R24/R95) / (1/297.15 - 1/368.15) = 4212
+// The anchor is 24 °C, not the conventional 25 — T0 and R0 are one measured
+// pair and must be changed together. Likewise beta is only meaningful paired
+// with the R0/T0 it was fitted against; if you re-measure, redo all three.
+//
+// The curve passes exactly through both measured points, so it is accurate
+// across 24-95 °C and extrapolates to the 120 °C top of the working range.
+// The 95 °C boiling assumption implies roughly 1500 m elevation — it sets the
+// hot end of the fit, so it is the number to re-check first if readings drift
+// at temperature.
+#define NTC_BETA      4212   // Beta coefficient (fitted, 24/95 °C)
+#define NTC_R0        120000 // Measured resistance at T0 (Ω)
+#define NTC_T0_K      297.15 // Anchor temperature in Kelvin (24°C)
+// 10kΩ series is kept deliberately. The theoretical optimum for a 40-120 °C
+// span is ~15kΩ, but that buys 608 ADC counts instead of 593 — a 2.5% gain.
+// At 10kΩ the quantisation is 0.18 °C/count at both 40 °C and 120 °C, far
+// below the sensor noise floor. Not worth rewiring.
 #define NTC_SERIES_R  10000  // Series resistor value (Ω)
 #define NTC_ADC_MAX   1023   // ESP8266 ADC resolution
 
