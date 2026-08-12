@@ -149,4 +149,4 @@
 // the air around it — the same inertia the predictive controller exists to fight
 // — so cutting both relays together leaves that heat to soak into the chamber
 // and the basket instead of being carried out. SEL ends it early.
-#define COOLDOWN_MS       90000UL   // 1.5 minute
+#define COOLDOWN_MS       60000UL   // 1 minute
