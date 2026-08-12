@@ -43,10 +43,10 @@ void displayRunning(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp,
 
     char buf[LCD_COLS + 1];
 
-    // Line 0: "NOW:123C TGT:180C"
-    snprintf(buf, sizeof(buf), "NOW:%3dC TGT:%3dC", (int)currentTemp, targetTemp);
+    // Line 0: "123C TRGT:180C". The current temperature carries no label
+    snprintf(buf, sizeof(buf), "%3dC  TRGT:%3dC", (int)currentTemp, targetTemp);
     lcd.setCursor(0, 0);
-    lcd.print(buf);
+    lcd.print(padRight(String(buf), LCD_COLS));
 
     // Countdown drops the hours field once it is no longer needed, so short
     // cooks keep the familiar MM:SS instead of a permanent leading "0:".

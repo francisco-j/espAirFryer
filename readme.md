@@ -50,6 +50,71 @@ countdown expires. Both drop the relays on the way out.
 | DONE | – | back to SET_TEMP |
 | ERROR | – | acknowledge → SET_TEMP |
 
+### Display screens
+
+One screen per state, all in `display.h`, all 16×2. Every line goes through
+`padRight()` to the full 16 columns, so a screen always overwrites the one
+before it — no `lcd.clear()` and no leftover characters from a longer previous
+line. Values below are the power-on defaults (`TEMP_DEFAULT` 100 °C,
+`TIME_DEFAULT_HOURS` 0, `TIME_DEFAULT_MINS` 30).
+
+| State | Function | Redrawn |
+|---|---|---|
+| SET_TEMP | `displaySetTemp()` | on each UP/DOWN press |
+| SET_HOURS | `displaySetHours()` | on each UP/DOWN press |
+| SET_MINS | `displaySetMins()` | on each UP/DOWN press |
+| PREHEAT | `displayPreheat()` | every `DISPLAY_REFRESH_MS` |
+| RUNNING | `displayRunning()` | every `DISPLAY_REFRESH_MS` |
+| DONE | `displayDone()` | once, on entry |
+| ERROR | `displayError()` | once, on entry |
+
+The three setup screens redraw only on a keypress rather than on a timer —
+there is nothing on them that changes on its own. PREHEAT and RUNNING carry a
+live temperature, so they are on the refresh timer instead; note that the timer
+only controls when the LCD is *repainted*, while the value itself is resampled
+every `TEMP_SAMPLE_MS`.
+
+    SET_TEMP                SET_HOURS               SET_MINS
+    ┌────────────────┐      ┌────────────────┐      ┌────────────────┐
+    │Set Temperature:│      │Set Hrs (100C): │      │Set Min (100C): │
+    │  100 C  [^v OK]│      │  0 h    [^v OK]│      │  0h 30m [^v OK]│
+    └────────────────┘      └────────────────┘      └────────────────┘
+
+The target temperature stays in the header of both time screens, and SET_MINS
+shows hours and minutes together, so the full setting is always visible while
+you edit the last field of it.
+
+    PREHEAT                 RUNNING                 DONE
+    ┌────────────────┐      ┌────────────────┐      ┌────────────────┐
+    │Preheating...   │      │118C  TRGT:120C │      │   DONE!  :)    │
+    │  52C -> 100C   │      │02:45  [H] [F]  │      │ Press SEL again│
+    └────────────────┘      └────────────────┘      └────────────────┘
+
+`[H]` and `[F]` mirror the heat and fan relays, each blanked to three spaces
+when its relay is off — so `[H]` blinking in and out through a cook is the duty
+modulation in `control.h` made visible. The fan runs for the whole cook, so
+`[F]` is steady; `[H]` cycling on a period of tens of seconds at low duty is
+normal and is the relay modulator stretching its period, not a fault.
+
+The countdown drops the hours field once it is no longer needed, so a short cook
+shows `02:45` rather than a permanent leading `0:`. With an hour or more left it
+becomes `1:30:00`, which fills the line exactly.
+
+    ERROR
+    ┌────────────────┐
+    │SENSOR FAULT!   │
+    │reads 0.0C      │
+    └────────────────┘
+
+ERROR prints the offending reading rather than just the fault, so a stuck `0.0C`
+from an open lead can be told apart from a plausible-but-too-cold value. See
+[Sensor fault detection](#sensor-fault-detection).
+
+Only the target is labelled on RUNNING line 0; the bare number is the current
+temperature. Labelling both ran the line to 17 characters, one past the 16 the
+LCD can show, and the overflow fell on the target's `C` — so the label was
+dropped from the value that needs it least.
+
 ### Heater control
 
 Plain hysteresis does not work on this machine. The element holds far more heat
@@ -107,9 +172,48 @@ Then, in order:
 | Rate reading is visibly jumpy | raise `DERIV_WINDOW_MS`, or lower `DERIV_SMOOTH_ALPHA` |
 
 Calibrate the thermistor before tuning any of this — a control loop cannot be
-tuned against a wrong measurement. Check `NTC_R0` and `NTC_BETA` against the
-actual part (`NTC_R0` is currently set for a 100 kΩ thermistor) and verify the
-reading in ice water and boiling water.
+tuned against a wrong measurement.
+
+#### Thermistor calibration
+
+Do not trust the part's markings. The thermistor in this build was sold as a
+100 kΩ/3950 and measured 120 kΩ with a beta of 4212 — a 20 kΩ and 260-unit
+error, far outside any real tolerance. Both constants come out of two
+measurements instead.
+
+Measure the thermistor **out of circuit**, on a meter, at two temperatures that
+straddle the range you actually cook in:
+
+1. Room temperature. Record the resistance *and a real thermometer reading* —
+   the anchor is whatever the room actually is, not an assumed 25 °C.
+2. Boiling water. Record the resistance. The temperature is set by your
+   altitude, not by the pot: 100 °C only at sea level, about 95 °C at 1500 m.
+   Use the altitude figure rather than a thermometer, since water boils at that
+   temperature by definition and a thermometer only adds its own error.
+
+Then solve for beta and fill in all three constants together:
+
+    B = ln(R1/R2) / (1/T1_K - 1/T2_K)          T in kelvin
+
+    NTC_R0   = R1        resistance at the low point
+    NTC_T0_K = T1 + 273.15
+    NTC_BETA = B
+
+`NTC_R0`, `NTC_T0_K` and `NTC_BETA` are one fitted triple, not three
+independent knobs. Changing `NTC_R0` while leaving `NTC_T0_K` at the
+conventional 298.15 silently skews every reading. If you re-measure, redo all
+three. The current values are fitted from 120 kΩ at 24 °C and 7.8 kΩ at 95 °C,
+and the curve passes exactly through both points.
+
+Ice water is a poorer second point than boiling water here: 0 °C is far below
+anything the fryer does, so it forces the fit to extrapolate across the whole
+working range instead of interpolating within it.
+
+A wrong curve and a badly placed probe look identical on the display but are not
+the same fault, and no constant fixes the second one. To tell them apart,
+compare the reading against a reference thermometer at steady state, not during
+a climb — the sensor has real thermal mass and lags badly while the temperature
+is still rising.
 
 ### Sensor fault detection
 
@@ -160,8 +264,17 @@ Required library (Library Manager): LiquidCrystal_I2C by Frank de Brabander.
 Check/adjust in config.h:
 
 LCD_I2C_ADDR — try 0x3F if the screen stays blank
-NTC_BETA — get this from your specific thermistor datasheet (common values: 3435, 3950)
-NTC_SERIES_R — match your actual series resistor value
+
+NTC_R0 / NTC_T0_K / NTC_BETA — do not copy these from a datasheet, and do not
+change one without the other two. Measure your own part at two temperatures and
+fit all three together; see [Thermistor calibration](#thermistor-calibration).
+The values in `config.h` are fitted to one specific thermistor and one specific
+altitude, and are not a sensible starting guess for a different build.
+
+NTC_SERIES_R — match your actual series resistor value. 10 kΩ is deliberate and
+worth keeping: the theoretical optimum for a 40–120 °C span is ~15 kΩ, which
+buys 608 ADC counts instead of 593. At 10 kΩ the quantisation is 0.18 °C per
+count across the whole range, well under the sensor noise floor.
 Wiring: NTC divider is 3.3V → NTC → A0 → 10kΩ → GND (ADC reads voltage across the series resistor)
 
 RELAY_ON / RELAY_OFF — set to HIGH / LOW, i.e. active-HIGH drive. This is not
