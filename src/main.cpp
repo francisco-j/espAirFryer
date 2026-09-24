@@ -9,7 +9,7 @@
  *   - Relay 1 (D8): heating element   – active HIGH, see RELAY_ACTIVE_HIGH
  *   - Relay 2 (D0): fan motor         – active HIGH, see RELAY_ACTIVE_HIGH
  *
- * Libraries required (install via Library Manager):
+ * Libraries required (resolved by PlatformIO from lib_deps):
  *   - LiquidCrystal_I2C  (by Frank de Brabander)
  *
  * State machine:
@@ -18,6 +18,7 @@
  *   does a preheat that has not reached its setpoint within PREHEAT_TIMEOUT_MS.
  */
 
+#include <Arduino.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include "config.h"

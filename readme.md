@@ -1,11 +1,13 @@
 ## Project structure
 
 espfryer/
- - espfryer.ino   – main sketch & state machine
- - config.h       – all pin definitions and tuneable constants
- - temperature.h  – NTC → °C conversion (Beta equation)
- - control.h      – heater control: predictive cutoff + duty modulation
- - display.h      – LCD screen functions for each state
+ - platformio.ini – board, flash layout, port and library pins
+ - src/
+   - main.cpp       – main sketch & state machine
+   - config.h       – all pin definitions and tuneable constants
+   - temperature.h  – NTC → °C conversion (Beta equation)
+   - control.h      – heater control: predictive cutoff + duty modulation
+   - display.h      – LCD screen functions for each state
 
 ## Pinout
 
@@ -327,7 +329,8 @@ Minutes cannot reach 0 unless at least one hour is set — that would make the
 total cook time zero. All the bands and limits are in `config.h`.
 
 ## Before uploading
-Required library (Library Manager): LiquidCrystal_I2C by Frank de Brabander.
+Required library: LiquidCrystal_I2C by Frank de Brabander. PlatformIO installs it
+on the first build from `lib_deps` in `platformio.ini` — nothing to do by hand.
 
 Check/adjust in config.h:
 
@@ -371,16 +374,19 @@ anything to it.
 
 ## Build and load
 
-    ./build.sh      # compile only
-    ./flash.sh      # compile, then upload
-    ./monitor.sh    # serial monitor
+This is a [PlatformIO](https://platformio.org/) project. Install the CLI
+(`brew install platformio`, or the PlatformIO IDE extension for VS Code), then:
 
-Paths, FQBN, port and monitor baud live in `build.conf` — the only file to edit
-if the arduino-cli location or the board's serial port changes. The port can also
-be overridden per-run, and if it is left empty the scripts pick the first
-`/dev/cu.usbserial-*` device they find:
+    pio run              # compile only
+    pio run -t upload    # compile, then upload
+    pio device monitor   # serial monitor
 
-    PORT=/dev/cu.usbserial-XXXX ./flash.sh
+Add `-v` for a verbose compile.
 
-Extra arguments are passed straight through to arduino-cli, e.g. `./build.sh -v`
-for a verbose compile.
+Board, flash layout, port and monitor baud live in `platformio.ini` — the only
+file to edit if the board or its serial port changes. It pins the settings the
+project has always been built with: 80 MHz CPU, 40 MHz dout flash, 4M1M layout,
+nodemcu reset method. Comment out `upload_port`/`monitor_port` to let PlatformIO
+auto-detect the board, or override one run from the environment:
+
+    pio run -t upload --upload-port /dev/cu.usbserial-XXXX
