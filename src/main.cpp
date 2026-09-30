@@ -14,6 +14,7 @@
  *
  * State machine:
  *   SET_TEMP → SET_HOURS → SET_MINS → PREHEAT → RUNNING → DONE → SET_TEMP
+ *   SEL during RUNNING pauses back to SET_TEMP with the time left preselected.
  *   Any implausibly cold reading diverts to ERROR with the relays forced off, as
  *   does a preheat that has not reached its setpoint within PREHEAT_TIMEOUT_MS.
  */
@@ -242,8 +243,10 @@ void loop() {
     // ── Select cook time: minutes ─────────────────────────────────────────────
     case STATE_SET_MINS:
         if (up) {
-            cookMins = min(cookMins + minuteStep(cookMins, cookHours),
-                           maxMinutes(cookHours));
+            // max() guards a resumed value already above the bound (see the
+            // pause in STATE_RUNNING): UP must never move it down.
+            cookMins = max(cookMins, min(cookMins + minuteStep(cookMins, cookHours),
+                                         maxMinutes(cookHours)));
             displaySetMins(lcd, targetTemp, cookHours, cookMins);
         }
         if (dn) {
@@ -328,9 +331,16 @@ void loop() {
             displayRunning(lcd, currentTemp, targetTemp, (int)remaining, heatOn, fanOn);
         }
 
-        // Allow user to abort
+        // Pause: the time still left becomes the preselection, so confirming the
+        // menus again picks up where the cook stopped. Rounded up to the whole
+        // minute so a pause never shortens the cook. The minutes are kept exact
+        // even where they sit outside the ladder's bounds (e.g. 1h 52m) — the
+        // minutes screen steps down from there, it does not snap on entry.
         if (sel) {
             relaysOff();
+            long leftMins = (remaining + 59) / 60;
+            cookHours = leftMins / 60;
+            cookMins  = leftMins % 60;
             state = STATE_SET_TEMP;
             displaySetTemp(lcd, targetTemp);
         }
