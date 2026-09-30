@@ -22,7 +22,8 @@ void displaySetHours(LiquidCrystal_I2C &lcd, int targetTemp, int hours) {
     lcd.setCursor(0, 0);
     lcd.print(padRight("Set Hrs (" + String(targetTemp) + "C):", LCD_COLS));
     lcd.setCursor(0, 1);
-    lcd.print(padRight("  " + String(hours) + " h    [^v OK]", LCD_COLS));
+    // Two-digit hours eat one of the leading spaces so the line still fits.
+    lcd.print(padRight(String(hours >= 10 ? " " : "  ") + String(hours) + " h    [^v OK]", LCD_COLS));
 }
 
 // Shows both fields so the running total stays visible while editing minutes.
@@ -30,7 +31,7 @@ void displaySetMins(LiquidCrystal_I2C &lcd, int targetTemp, int hours, int mins)
     lcd.setCursor(0, 0);
     lcd.print(padRight("Set Min (" + String(targetTemp) + "C):", LCD_COLS));
     lcd.setCursor(0, 1);
-    lcd.print(padRight("  " + String(hours) + "h " + String(mins) + "m [^v OK]", LCD_COLS));
+    lcd.print(padRight(String(hours >= 10 ? " " : "  ") + String(hours) + "h " + String(mins) + "m [^v OK]", LCD_COLS));
 }
 
 // ── Running screen ────────────────────────────────────────────────────────────
@@ -54,8 +55,9 @@ void displayRunning(LiquidCrystal_I2C &lcd, float currentTemp, int targetTemp,
     if (hrs > 0) snprintf(clock, sizeof(clock), "%d:%02d:%02d", hrs, mins, secs);
     else         snprintf(clock, sizeof(clock), "%02d:%02d", mins, secs);
 
-    // Line 1: "02:45  [H] [F]"  indicators toggle with relay state
-    String status = String(clock) + "  " +
+    // Line 1: "02:45  [H] [F]"  indicators toggle with relay state. A two-digit
+    // hours clock ("12:00:00") takes one of the gap spaces to stay within 16.
+    String status = String(clock) + (hrs >= 10 ? " " : "  ") +
                     String(heatOn ? "[H]" : "   ") + " " +
                     String(fanOn  ? "[F]" : "   ");
     lcd.setCursor(0, 1);

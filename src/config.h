@@ -85,7 +85,7 @@
 
 // ── Time Settings ────────────────────────────────────────────────────────────
 // Cook time is entered as hours first, then minutes.
-#define TIME_MAX_HOURS     6     // hours
+#define TIME_MAX_HOURS     24    // hours
 #define TIME_DEFAULT_HOURS 0
 #define TIME_DEFAULT_MINS  30
 

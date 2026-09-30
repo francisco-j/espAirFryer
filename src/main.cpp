@@ -119,7 +119,10 @@ int minuteStep(int mins, int hours) {
 // Minutes may only reach 0 when at least one hour is set — otherwise the total
 // cook time would be zero.
 int minMinutes(int hours) { return hours >= 1 ? 0 : 1; }
-int maxMinutes(int hours) { return hours >= 1 ? TIME_MINS_MAX_HRS : TIME_MINS_MAX; }
+int maxMinutes(int hours) {
+    if (hours >= TIME_MAX_HOURS) return 0;   // the cap is a total, not just the hours field
+    return hours >= 1 ? TIME_MINS_MAX_HRS : TIME_MINS_MAX;
+}
 
 int totalCookMins() { return cookHours * 60 + cookMins; }
 
